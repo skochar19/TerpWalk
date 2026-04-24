@@ -69,43 +69,45 @@ const BLUE_LIGHTS = [
   { id: 'bl-40', lat: 38.9888, lng: -76.9540, name: 'Route 1 / Baltimore Ave' },
 ];
 
-// Parking lot polygons (treated as less safe at night)
-const PARKING_LOTS = [
-  {
-    id: 'p-01',
-    name: 'Regents Drive Garage',
-    coords: [
-      [38.9848, -76.9415], [38.9848, -76.9400], [38.9838, -76.9400], [38.9838, -76.9415]
-    ]
-  },
-  {
-    id: 'p-02',
-    name: 'Paint Branch Parking Lot',
-    coords: [
-      [38.9925, -76.9400], [38.9925, -76.9380], [38.9912, -76.9380], [38.9912, -76.9400]
-    ]
-  },
-  {
-    id: 'p-03',
-    name: 'Lot 1 (Stadium)',
-    coords: [
-      [38.9960, -76.9480], [38.9960, -76.9455], [38.9945, -76.9455], [38.9945, -76.9480]
-    ]
-  },
-  {
-    id: 'p-04',
-    name: 'Lot 4 (West)',
-    coords: [
-      [38.9918, -76.9490], [38.9918, -76.9470], [38.9905, -76.9470], [38.9905, -76.9490]
-    ]
-  },
-  {
-    id: 'p-05',
-    name: 'South Campus Lots',
-    coords: [
-      [38.9840, -76.9475], [38.9840, -76.9450], [38.9820, -76.9450], [38.9820, -76.9475]
-    ]
-  }
+// Parking lot centers — used for heatmap danger scoring and route penalty
+// Each entry covers a ~120m radius to account for lot size
+const PARKING_CENTERS = [
+  // Garages
+  { lat: 38.9843, lng: -76.9408, name: 'Regents Drive Garage' },
+  { lat: 38.9920, lng: -76.9388, name: 'Paint Branch Drive Garage' },
+  { lat: 38.9952, lng: -76.9470, name: 'Lot 1 Garage (Stadium Dr)' },
+
+  // Stadium / North athletic lots (Lot 1a, 1b, 2 — large surface lots)
+  { lat: 38.9970, lng: -76.9510, name: 'Lot 1a (Stadium North)' },
+  { lat: 38.9945, lng: -76.9520, name: 'Lot 1b (Stadium West)' },
+  { lat: 38.9928, lng: -76.9500, name: 'Lot 2 (Leonardtown)' },
+
+  // Cole Field House / XFINITY Center area (Lot 4, Lot Y, Lot YY)
+  { lat: 38.9938, lng: -76.9490, name: 'Lot 4 (Cole Field House)' },
+  { lat: 38.9958, lng: -76.9460, name: 'Lot YY (XFINITY North)' },
+  { lat: 38.9950, lng: -76.9440, name: 'Lot Y (XFINITY East)' },
+
+  // Comcast / North campus lots (Lot 10, Lot 11)
+  { lat: 38.9932, lng: -76.9418, name: 'Lot 10 (Comcast Center)' },
+  { lat: 38.9918, lng: -76.9410, name: 'Lot 11 (Denton / Ellicott North)' },
+
+  // Engineering / East campus (Lot 4A, Lot 4B, Lot QQ)
+  { lat: 38.9908, lng: -76.9370, name: 'Lot 4A (Engineering East)' },
+  { lat: 38.9893, lng: -76.9358, name: 'Lot QQ (Paint Branch East)' },
+
+  // South campus lots (Lot 3, Lot EE, near Ellicott / South diner)
+  { lat: 38.9832, lng: -76.9462, name: 'Lot 3 / South Campus Diner' },
+  { lat: 38.9820, lng: -76.9445, name: 'Lot EE (South Campus)' },
+  { lat: 38.9838, lng: -76.9430, name: 'Lot FF (Ellicott Hall)' },
+
+  // Route 1 / Baltimore Ave surface lots (Lot Z, Lot ZZ)
+  { lat: 38.9850, lng: -76.9520, name: 'Lot Z (Route 1 North)' },
+  { lat: 38.9810, lng: -76.9535, name: 'Lot ZZ (Route 1 South)' },
+  { lat: 38.9875, lng: -76.9505, name: 'Lot TT (Fraternity Row)' },
+
+  // Adelphi Road / North perimeter
+  { lat: 38.9980, lng: -76.9450, name: 'Lot BB (Varsity Drive)' },
+  { lat: 38.9975, lng: -76.9405, name: 'Lot CC (North Campus)' },
 ];
 
 // Community pin type definitions

@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "1777071050301",
+    "lat": 38.98558463967174,
+    "lng": -76.95038795471193,
+    "type": "unsafe",
+    "description": "parking lot",
+    "timestamp": "2026-04-24T22:50:50.303Z",
+    "votes": 0
+  },
+  {
+    "id": "1777071600795",
+    "lat": 38.98617149772901,
+    "lng": -76.95070981979372,
+    "type": "unsafe",
+    "description": "parking lot",
+    "timestamp": "2026-04-24T23:00:00.795Z",
+    "votes": 1
+  }
+]

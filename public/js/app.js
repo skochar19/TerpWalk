@@ -5,7 +5,6 @@ const state = {
   endMarker: null,
   routeLayers: [],
   blueLightMarkers: [],
-  parkingLayers: [],
   communityMarkers: [],
   heatLayer: null,
   activeRoute: null,
@@ -38,7 +37,6 @@ function initMap() {
   }).addTo(state.map);
 
   renderBlueLights();
-  renderParkingLots();
   setupMapClickHandler();
   loadCommunityPins();
 }
@@ -67,26 +65,6 @@ function renderBlueLights() {
   });
 }
 
-// ─── Parking Lot Rendering ────────────────────────────────────────────────────
-function renderParkingLots() {
-  PARKING_LOTS.forEach(lot => {
-    const poly = L.polygon(lot.coords, {
-      color: '#ef4444',
-      fillColor: '#ef4444',
-      fillOpacity: 0.12,
-      weight: 1.5,
-      dashArray: '6,4'
-    }).bindPopup(`
-      <div class="popup-content">
-        <h4>🅿️ ${lot.name}</h4>
-        <p class="popup-warning">⚠️ Parking lots can be less safe at night. Take lit pathways around them.</p>
-      </div>
-    `);
-    poly.addTo(state.map);
-    state.parkingLayers.push(poly);
-  });
-}
-
 // ─── Map Click (place start/end or pin) ──────────────────────────────────────
 function setupMapClickHandler() {
   state.map.on('click', (e) => {
@@ -104,10 +82,9 @@ function setupMapClickHandler() {
   });
 }
 
-// ─── Geocoding (via Nominatim, restricted to UMD area) ───────────────────────
+// ─── Geocoding ────────────────────────────────────────────────────────────────
 async function geocode(query) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ' University of Maryland College Park')}&format=json&limit=5&viewbox=${UMD_BOUNDS.west},${UMD_BOUNDS.north},${UMD_BOUNDS.east},${UMD_BOUNDS.south}&bounded=1`;
-  const resp = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  const resp = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
   return resp.json();
 }
 
@@ -188,10 +165,9 @@ function scoreRoute(coords) {
 
   let totalDist = 0;
   let blueLightCount = 0;
-  let parkingPenalty = 0;
+  let parkingPointCount = 0;
 
   sampled.forEach(([lng, lat]) => {
-    // Find nearest blue light
     const nearest = BLUE_LIGHTS.reduce((best, bl) => {
       const d = distanceMeters(lat, lng, bl.lat, bl.lng);
       return d < best.d ? { d, bl } : best;
@@ -200,30 +176,23 @@ function scoreRoute(coords) {
     totalDist += nearest.d;
     if (nearest.d < 100) blueLightCount++;
 
-    // Parking lot penalty
-    PARKING_LOTS.forEach(lot => {
-      const center = lot.coords.reduce(
-        (acc, c) => [acc[0] + c[0] / lot.coords.length, acc[1] + c[1] / lot.coords.length],
-        [0, 0]
-      );
-      if (distanceMeters(lat, lng, center[0], center[1]) < 80) parkingPenalty += 5;
-    });
+    const inParking = PARKING_CENTERS.some(p => distanceMeters(lat, lng, p.lat, p.lng) < 120);
+    if (inParking) parkingPointCount++;
   });
 
   const avgDist = totalDist / sampled.length;
   const blueLightCoverage = (blueLightCount / sampled.length) * 100;
+  const parkingPct = (parkingPointCount / sampled.length) * 100;
 
-  // Score: 100 is perfect (all within 100m of a blue light, no parking)
   let score = 100;
-  score -= Math.min(50, avgDist / 8);           // distance penalty (max -50)
-  score += Math.min(20, blueLightCoverage * 0.5); // coverage bonus (max +20)
-  score -= Math.min(20, parkingPenalty);          // parking penalty (max -20)
+  score -= Math.min(50, avgDist / 8);
+  score += Math.min(20, blueLightCoverage * 0.5);
+  score -= Math.min(30, parkingPct * 0.6);
 
   return {
     score: Math.max(0, Math.min(100, Math.round(score))),
     avgDistToBlueLight: Math.round(avgDist),
-    blueLightCoverage: Math.round(blueLightCoverage),
-    parkingPenalty
+    blueLightCoverage: Math.round(blueLightCoverage)
   };
 }
 
@@ -272,10 +241,10 @@ async function findRoute() {
       const sl = scoreLabel(s.score);
       const layer = L.geoJSON(s.route.geometry, {
         style: {
-          color: isRecommended ? sl.color : '#64748b',
-          weight: isRecommended ? 6 : 3,
-          opacity: isRecommended ? 0.9 : 0.45,
-          dashArray: isRecommended ? null : '8,6'
+          color: isRecommended ? sl.color : '#f87171',
+          weight: isRecommended ? 6 : 4,
+          opacity: isRecommended ? 0.95 : 0.6,
+          dashArray: isRecommended ? null : '10,7'
         }
       }).addTo(state.map);
 
@@ -285,7 +254,7 @@ async function findRoute() {
           <p>Safety Score: <strong style="color:${sl.color}">${s.score}/100 — ${sl.label}</strong></p>
           <p>Avg distance to blue light: ${s.avgDistToBlueLight}m</p>
           <p>Blue light coverage: ${s.blueLightCoverage}%</p>
-          <p>Walk time: ~${Math.round(s.route.duration / 60)} min</p>
+          <p>Walk time: ~${Math.max(1, Math.round(s.route.distance / 72))} min</p>
         </div>
       `);
 
@@ -344,7 +313,7 @@ function showSafeZones(coords) {
 // ─── Route Info Panel ─────────────────────────────────────────────────────────
 function displayRouteInfo(scored) {
   const sl = scoreLabel(scored.score);
-  const mins = Math.round(scored.route.duration / 60);
+  const mins = Math.max(1, Math.round(scored.route.distance / 72));
   const dist = (scored.route.distance / 1000).toFixed(2);
 
   document.getElementById('route-info').style.display = 'block';
@@ -374,8 +343,6 @@ function startWalk() {
   document.getElementById('btn-stop-walk').style.display = 'inline-flex';
   document.getElementById('timer-display').style.display = 'block';
 
-  notifyEmergencyContact('started');
-
   state.walkTimer = setInterval(() => {
     state.walkSeconds++;
     updateTimerDisplay();
@@ -395,8 +362,7 @@ function stopWalk() {
   state.walkStarted = false;
   document.getElementById('btn-start-walk').style.display = 'inline-flex';
   document.getElementById('btn-stop-walk').style.display = 'none';
-  notifyEmergencyContact('completed');
-  showNotification('✅ Walk completed! Your emergency contact has been notified.', 'success');
+  showNotification('✅ Walk completed! Stay safe.', 'success');
 }
 
 function updateTimerDisplay() {
@@ -419,29 +385,6 @@ function triggerBlueLightReminder() {
     `🔵 5-min check: Nearest blue light is "${nearest.bl.name}" (~${Math.round(nearest.d)}m away). Stay aware!`,
     'info'
   );
-}
-
-// ─── Emergency Contact ────────────────────────────────────────────────────────
-function notifyEmergencyContact(event) {
-  const name = document.getElementById('contact-name').value.trim();
-  const contact = document.getElementById('contact-info').value.trim();
-  if (!name || !contact) return;
-
-  const startLoc = state.startMarker ? state.startMarker.getLatLng() : null;
-  const endLoc = state.endMarker ? state.endMarker.getLatLng() : null;
-  const mins = state.activeRoute ? Math.round(state.activeRoute.route.duration / 60) : '?';
-
-  const msg = event === 'started'
-    ? `TerpWalk: ${name} has been notified that you started your walk. ETA: ${mins} min. Route is being tracked via TerpWalk.`
-    : `TerpWalk: Your walk has been completed safely.`;
-
-  // Display the notification that would be sent
-  document.getElementById('contact-status').innerHTML = `
-    <div class="contact-sent">
-      <span>📨 Notification prepared for ${name} (${contact})</span>
-      <small>${msg}</small>
-    </div>
-  `;
 }
 
 // ─── Community Pins ───────────────────────────────────────────────────────────
@@ -565,13 +508,6 @@ function toggleBlueLights(visible) {
   });
 }
 
-function toggleParking(visible) {
-  state.parkingLayers.forEach(layer => {
-    if (visible) layer.addTo(state.map);
-    else state.map.removeLayer(layer);
-  });
-}
-
 function toggleHeatmap(visible) {
   if (!L.heatLayer) return; // plugin not loaded
 
@@ -652,8 +588,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Layer toggles
   document.getElementById('toggle-blue-lights').addEventListener('change', e =>
     toggleBlueLights(e.target.checked));
-  document.getElementById('toggle-parking').addEventListener('change', e =>
-    toggleParking(e.target.checked));
   document.getElementById('toggle-heatmap').addEventListener('change', e =>
     toggleHeatmap(e.target.checked));
 });

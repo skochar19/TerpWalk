@@ -33,7 +33,33 @@ function savePins(pins) {
   fs.writeFileSync(PINS_FILE, JSON.stringify(pins, null, 2));
 }
 
-// Proxy OSRM routing to avoid CORS issues and add safety scoring
+// Decode a Valhalla-encoded polyline (precision 6) into GeoJSON [lng, lat] pairs
+function decodePolyline(str) {
+  let index = 0, lat = 0, lng = 0;
+  const coords = [];
+  const factor = 1e6;
+  while (index < str.length) {
+    let b, shift = 0, result = 0;
+    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : result >> 1;
+    shift = 0; result = 0;
+    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : result >> 1;
+    coords.push([lng / factor, lat / factor]);
+  }
+  return coords;
+}
+
+function valhallaToRoute(trip) {
+  const coords = trip.legs.flatMap(leg => decodePolyline(leg.shape));
+  return {
+    geometry: { type: 'LineString', coordinates: coords },
+    distance: trip.summary.length * 1000,
+    duration: trip.summary.time
+  };
+}
+
+// Proxy Valhalla pedestrian routing — follows footways, campus paths, and sidewalks
 app.get('/api/route', async (req, res) => {
   const { startLat, startLng, endLat, endLng } = req.query;
   if (!startLat || !startLng || !endLat || !endLng) {
@@ -41,12 +67,68 @@ app.get('/api/route', async (req, res) => {
   }
 
   try {
-    const url = `https://router.project-osrm.org/route/v1/foot/${startLng},${startLat};${endLng},${endLat}?geometries=geojson&overview=full&alternatives=true&steps=true`;
-    const response = await fetch(url);
+    const body = {
+      locations: [
+        { lon: parseFloat(startLng), lat: parseFloat(startLat) },
+        { lon: parseFloat(endLng),   lat: parseFloat(endLat)   }
+      ],
+      costing: 'pedestrian',
+      costing_options: {
+        pedestrian: {
+          use_tracks: 1.0,
+          use_living_streets: 1.0,
+          use_hills: 0.5
+        }
+      },
+      alternates: 3
+    };
+
+    const response = await fetch('https://valhalla1.openstreetmap.de/route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
     const data = await response.json();
-    res.json(data);
+
+    if (data.error || !data.trip) {
+      return res.status(400).json({ error: data.error || 'No route found' });
+    }
+
+    const routes = [valhallaToRoute(data.trip)];
+    if (data.alternates) {
+      data.alternates.forEach(alt => routes.push(valhallaToRoute(alt.trip)));
+    }
+
+    res.json({ code: 'Ok', routes });
   } catch (err) {
     res.status(500).json({ error: 'Routing service unavailable', detail: err.message });
+  }
+});
+
+// Geocoding proxy — Nominatim requires a valid User-Agent which browsers can't set
+const UMD_VIEWBOX = '-76.9600,39.0020,-76.9290,38.9790';
+app.get('/api/geocode', async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.status(400).json({ error: 'Missing query' });
+
+  const strategies = [
+    `${q} University of Maryland College Park`,
+    `${q} College Park MD`,
+    q
+  ];
+
+  try {
+    for (const query of strategies) {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&viewbox=${UMD_VIEWBOX}`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'TerpWalk/1.0 (UMD campus safety app)' }
+      });
+      const data = await response.json();
+      if (data.length) return res.json(data);
+    }
+    res.json([]);
+  } catch (err) {
+    res.status(500).json({ error: 'Geocoding unavailable', detail: err.message });
   }
 });
 
