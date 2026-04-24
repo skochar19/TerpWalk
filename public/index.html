@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TerpWalk — Safe Routes on UMD Campus</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet Heat CSS (none needed, JS only) -->
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <div class="logo">
+        🐢 TerpWalk
+        <span class="logo-badge">UMD CAMPUS</span>
+      </div>
+      <span class="header-sub">Safe walking routes for Terps</span>
+    </div>
+    <div class="emergency-badge">
+      🚨 UMD Police: <a href="tel:3014054911">(301) 405-4911</a>&nbsp;&nbsp;|&nbsp;&nbsp;Emergency: <a href="tel:911">911</a>
+    </div>
+  </header>
+
+  <!-- ── App Body ────────────────────────────────────────────────────────────── -->
+  <div class="app-body">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+    <aside id="sidebar">
+
+      <!-- Route Planning -->
+      <div class="sidebar-section">
+        <div class="section-title">🗺️ Plan Your Route</div>
+
+        <div class="input-group">
+          <div class="input-row">
+            <div class="input-dot start"></div>
+            <input id="input-start" class="route-input" type="text" placeholder="Start (type or click map)" />
+            <button id="btn-search-start" class="btn btn-outline btn-icon" title="Search">🔍</button>
+          </div>
+          <div id="start-coords" class="coords-label"></div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-row">
+            <div class="input-dot end"></div>
+            <input id="input-end" class="route-input" type="text" placeholder="Destination (type or click map)" />
+            <button id="btn-search-end" class="btn btn-outline btn-icon" title="Search">🔍</button>
+          </div>
+          <div id="end-coords" class="coords-label"></div>
+        </div>
+
+        <div class="click-mode-row">
+          🖱️ Click map to set:
+          <select id="click-mode">
+            <option value="start">Start point (A)</option>
+            <option value="end">Destination (B)</option>
+            <option value="none">Nothing</option>
+          </select>
+        </div>
+
+        <button id="btn-find-route" class="btn btn-primary">🛡️ Find Safest Route</button>
+        <button id="btn-clear-route" class="btn btn-secondary">✕ Clear Route</button>
+
+        <div id="status-msg" class="status-msg"></div>
+      </div>
+
+      <!-- Route Info -->
+      <div id="route-info" class="sidebar-section">
+        <div class="section-title">📊 Route Safety Score</div>
+        <div id="route-score" class="score-display"></div>
+        <div id="route-stats"></div>
+      </div>
+
+      <!-- Walk Timer -->
+      <div id="walk-controls" class="sidebar-section">
+        <div class="section-title">⏱️ Walk Timer</div>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px">
+          Start the timer when you begin walking. You'll receive a blue light check reminder every 5 minutes.
+        </p>
+        <p style="font-size:0.75rem;color:var(--text-muted)">Est. walk time: <span id="walk-duration">—</span></p>
+        <div class="walk-btn-row">
+          <button id="btn-start-walk" class="btn btn-green">▶ Start Walk</button>
+          <button id="btn-stop-walk" class="btn btn-red">■ End Walk</button>
+        </div>
+        <div id="timer-display">
+          <div id="timer-clock">00:00</div>
+          <div id="walk-duration-sub" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Walk in progress</div>
+        </div>
+      </div>
+
+      <!-- Emergency Contact -->
+      <div class="sidebar-section">
+        <div class="section-title">📞 Emergency Contact</div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:8px">
+          Enter a contact to notify when you start and finish your walk.
+        </p>
+        <input id="contact-name" class="contact-input" type="text" placeholder="Contact name" />
+        <input id="contact-info" class="contact-input" type="text" placeholder="Phone or email" />
+        <div id="contact-status"></div>
+      </div>
+
+      <!-- Community Reporting -->
+      <div class="sidebar-section">
+        <div class="section-title">👥 Community Reports</div>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:10px">
+          Help others stay safe by flagging unsafe areas, broken lights, or safe spots.
+        </p>
+        <button id="btn-add-pin" class="btn btn-outline" style="width:100%">
+          📍 Report a Location
+        </button>
+      </div>
+
+      <!-- Layer Controls -->
+      <div class="sidebar-section">
+        <div class="section-title">🗂️ Map Layers</div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">🔵 Emergency Blue Lights</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-blue-lights" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">🅿️ Parking Lots (caution)</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-parking" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">🌡️ Safety Heatmap</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-heatmap" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="sidebar-section">
+        <div class="section-title">📌 Legend</div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#3b82f6"></div>
+            Blue light phone
+          </div>
+          <div class="legend-item">
+            <div class="legend-line" style="background:#22c55e"></div>
+            Safest route
+          </div>
+          <div class="legend-item">
+            <div class="legend-line" style="background:#64748b"></div>
+            Alt. route
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#ef4444;opacity:0.5"></div>
+            Parking (caution)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#a855f7"></div>
+            Community pin
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── Map ─────────────────────────────────────────────────────────────── -->
+    <div id="map"></div>
+  </div>
+
+  <!-- ── Notifications ───────────────────────────────────────────────────────── -->
+  <div id="notifications"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet Heat plugin -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- App scripts -->
+  <script src="/js/data.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
